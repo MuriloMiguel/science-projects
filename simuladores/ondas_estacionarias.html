@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interferência de Ondas</title>
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        color: #ddd;
+        font-family: monospace;
+        overflow: hidden;
+    }
+    #app {
+        display: flex;
+        height: 100%;
+    }
+    #canvasWrap {
+        flex: 1;
+        position: relative;
+        min-width: 0;
+    }
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+        cursor: grab;
+    }
+    #hint {
+        position: absolute;
+        bottom: 8px;
+        left: 10px;
+        font-size: 11px;
+        color: #666;
+        pointer-events: none;
+    }
+    #sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        background: #000;
+        border-left: 1px solid #333;
+        padding: 14px 12px;
+        overflow-y: auto;
+    }
+    #sidebar h2 {
+        font-size: 13px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #fff;
+        margin: 0 0 14px 0;
+        font-weight: normal;
+    }
+    .ctrl { margin-bottom: 12px; }
+    .ctrl label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 3px;
+    }
+    .ctrl label span.val { color: #6cf; }
+    .ctrl input[type=range] { width: 100%; }
+    .btnrow { display: flex; gap: 6px; margin-top: 16px; }
+    button {
+        flex: 1;
+        background: #111;
+        color: #ccc;
+        border: 1px solid #444;
+        padding: 6px 4px;
+        cursor: pointer;
+        font-family: monospace;
+        font-size: 11px;
+    }
+    button:hover { background: #222; }
+    a.back {
+        display: block;
+        color: #6cf;
+        text-decoration: none;
+        font-size: 11px;
+        margin-bottom: 16px;
+    }
+
+    @media (max-width: 700px) {
+        #app { flex-direction: column; }
+        #sidebar {
+            width: 100%;
+            height: 42%;
+            border-left: none;
+            border-top: 1px solid #333;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 12px;
+            align-content: start;
+        }
+        #sidebar h2 { grid-column: 1 / -1; margin-bottom: 8px; }
+        .btnrow { grid-column: 1 / -1; }
+    }
+</style>
+</head>
+<body>
+
+<div id="app">
+    <div id="canvasWrap">
+        <canvas id="c"></canvas>
+        <div id="hint">arraste as fontes no canvas</div>
+    </div>
+    <div id="sidebar">
+        <a class="back" href="../index.html">&larr; voltar</a>
+        <h2>Controladores</h2>
+
+        <div class="ctrl">
+            <label>n° fontes <span class="val" id="nVal">2</span></label>
+            <input id="n" type="range" min="1" max="6" step="1" value="2">
+        </div>
+        <div class="ctrl check" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#999;">
+            <input id="chladni" type="checkbox">
+            <label style="margin:0;">padrão fixo (Chladni)</label>
+        </div>
+        <div class="ctrl">
+            <label>frequência <span class="val" id="freqVal">1.00</span></label>
+            <input id="freq" type="range" min="0.2" max="3" step="0.05" value="1">
+        </div>
+        <div class="ctrl" id="dfCtrl">
+            <label>Δf entre fontes (batimento) <span class="val" id="dfVal">0.00</span></label>
+            <input id="df" type="range" min="0" max="0.6" step="0.02" value="0">
+        </div>
+        <div class="ctrl">
+            <label>velocidade de propagação <span class="val" id="vVal">120</span></label>
+            <input id="v" type="range" min="40" max="300" step="5" value="120">
+        </div>
+        <div class="ctrl" id="speedCtrl">
+            <label>velocidade da simulação <span class="val" id="speedVal">1.0x</span></label>
+            <input id="speed" type="range" min="0.1" max="3" step="0.1" value="1">
+        </div>
+        <div class="ctrl">
+            <label>contraste <span class="val" id="contrastVal">1.0</span></label>
+            <input id="contrast" type="range" min="0.3" max="2.5" step="0.1" value="1">
+        </div>
+
+        <div class="btnrow">
+            <button id="pause">pausar</button>
+            <button id="reset">reiniciar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const canvasWrap = document.getElementById('canvasWrap');
+
+// canvas de baixa resolução usado para o cálculo por pixel (desempenho);
+// é ampliado para o canvas visível ao final de cada frame.
+const buf = document.createElement('canvas');
+const bctx = buf.getContext('2d');
+const RES = 2.5; // px do buffer por "célula" — menor = mais nítido, mais pesado
+
+let cw = 0, ch = 0, bw = 0, bh = 0;
+let imgData = null;
+
+function resize() {
+    const rect = canvasWrap.getBoundingClientRect();
+    cw = Math.max(1, Math.round(rect.width));
+    ch = Math.max(1, Math.round(rect.height));
+    canvas.width = cw;
+    canvas.height = ch;
+
+    bw = Math.max(1, Math.round(cw / RES));
+    bh = Math.max(1, Math.round(ch / RES));
+    buf.width = bw;
+    buf.height = bh;
+    imgData = bctx.createImageData(bw, bh);
+
+    clampSources();
+}
+new ResizeObserver(resize).observe(canvasWrap);
+
+const el = id => document.getElementById(id);
+const nEl = el('n'), freqEl = el('freq'), dfEl = el('df'), vEl = el('v'),
+      speedEl = el('speed'), contrastEl = el('contrast'), chladniChk = el('chladni');
+const nVal = el('nVal'), freqVal = el('freqVal'), dfVal = el('dfVal'), vVal = el('vVal'),
+      speedVal = el('speedVal'), contrastVal = el('contrastVal');
+const dfCtrl = el('dfCtrl'), speedCtrl = el('speedCtrl'), hint = el('hint');
+const pauseBtn = el('pause'), resetBtn = el('reset');
+
+let paused = false;
+let sources = []; // { xf, yf (fração 0..1 do canvas), freq }
+let dragIndex = -1;
+let simTime = 0;
+
+function layoutSources() {
+    const n = parseInt(nEl.value);
+    sources = [];
+    const cy = 0.5;
+    const spacing = Math.min(0.6, 0.12 * n);
+    for (let i = 0; i < n; i++) {
+        const t = n === 1 ? 0.5 : i / (n - 1);
+        const xf = 0.5 + (t - 0.5) * spacing * 2;
+        sources.push({ xf, yf: cy });
+    }
+}
+layoutSources();
+
+function clampSources() {
+    for (const s of sources) {
+        s.xf = Math.min(1, Math.max(0, s.xf));
+        s.yf = Math.min(1, Math.max(0, s.yf));
+    }
+}
+
+function updateLabels() {
+    nVal.textContent = nEl.value;
+    freqVal.textContent = parseFloat(freqEl.value).toFixed(2);
+    dfVal.textContent = parseFloat(dfEl.value).toFixed(2);
+    vVal.textContent = vEl.value;
+    speedVal.textContent = parseFloat(speedEl.value).toFixed(1) + 'x';
+    contrastVal.textContent = parseFloat(contrastEl.value).toFixed(1);
+}
+updateLabels();
+
+function render() {
+    const n = sources.length;
+    if (n === 0 || bw === 0) return;
+
+    const baseFreq = parseFloat(freqEl.value);
+    const df = parseFloat(dfEl.value);
+    const speedOfWave = parseFloat(vEl.value);
+    const contrast = parseFloat(contrastEl.value);
+    const isChladni = chladniChk.checked;
+
+    // frequência individual de cada fonte, espalhada em torno da base
+    // (no modo Chladni todas usam a frequência base — nós só ficam fixos
+    // quando todas as fontes oscilam em uníssono)
+    const freqs = sources.map((s, i) => {
+        if (isChladni) return baseFreq;
+        const spread = n === 1 ? 0 : (i - (n - 1) / 2) * (df / Math.max(1, n - 1)) * 2;
+        return baseFreq + spread;
+    });
+
+    const data = imgData.data;
+    const sx = cw / bw, sy = ch / bh;
+
+    for (let j = 0; j < bh; j++) {
+        const py = j * sy;
+        for (let i = 0; i < bw; i++) {
+            const px = i * sx;
+            const idx = (j * bw + i) * 4;
+
+            if (isChladni) {
+                // Soma fasorial: em vez do valor instantâneo psi(x,y,t),
+                // calculamos a AMPLITUDE resultante R(x,y), que não depende
+                // do tempo quando todas as fontes têm a mesma frequência.
+                // R = 0 é um nó (silêncio permanente); R máximo é antinó.
+                let real = 0, imag = 0;
+                for (let k = 0; k < n; k++) {
+                    const src = sources[k];
+                    const dx = px - src.xf * cw;
+                    const dy = py - src.yf * ch;
+                    const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+                    const wl = speedOfWave / freqs[k];
+                    const kNum = (2 * Math.PI) / wl;
+                    const decay = 1 / Math.sqrt(1 + dist * 0.02);
+                    const phase = kNum * dist;
+                    real += decay * Math.cos(phase);
+                    imag += decay * Math.sin(phase);
+                }
+                const R = Math.sqrt(real * real + imag * imag) / Math.sqrt(n);
+                // realça como "areia" apenas perto dos nós (R ~ 0)
+                const glow = Math.exp(-6 * contrast * R * R);
+                data[idx]     = glow * 250;
+                data[idx + 1] = glow * 245;
+                data[idx + 2] = glow * 210;
+                data[idx + 3] = 255;
+                continue;
+            }
+
+            let sum = 0;
+            for (let k = 0; k < n; k++) {
+                const src = sources[k];
+                const dx = px - src.xf * cw;
+                const dy = py - src.yf * ch;
+                const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+                const wl = speedOfWave / freqs[k];
+                const kNum = (2 * Math.PI) / wl;
+                const w = 2 * Math.PI * freqs[k];
+                const decay = 1 / Math.sqrt(1 + dist * 0.02);
+                sum += Math.sin(kNum * dist - w * simTime) * decay;
+            }
+            const norm = sum / Math.sqrt(n);
+            let v = norm * contrast;
+            v = Math.max(-1, Math.min(1, v));
+
+            if (v >= 0) {
+                // crista: azul claro -> branco
+                data[idx]     = 40 + v * 215;
+                data[idx + 1] = 80 + v * 175;
+                data[idx + 2] = 140 + v * 115;
+            } else {
+                // vale: azul escuro -> preto
+                const a = -v;
+                data[idx]     = 10 - a * 10;
+                data[idx + 1] = 20 - a * 15;
+                data[idx + 2] = 60 - a * 50;
+            }
+            data[idx + 3] = 255;
+        }
+    }
+    bctx.putImageData(imgData, 0, 0);
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.drawImage(buf, 0, 0, bw, bh, 0, 0, cw, ch);
+
+    // marca as fontes
+    for (const s of sources) {
+        const x = s.xf * cw, y = s.yf * ch;
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffd400';
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#000';
+        ctx.stroke();
+    }
+}
+
+let lastT = null;
+function loop(t) {
+    if (lastT === null) lastT = t;
+    const dt = (t - lastT) / 1000;
+    lastT = t;
+    if (!paused) {
+        simTime += dt * parseFloat(speedEl.value);
+    }
+    render();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// --- interação: arrastar fontes ---
+function pointerPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const p = evt.touches ? evt.touches[0] : evt;
+    return { x: p.clientX - rect.left, y: p.clientY - rect.top };
+}
+function findNearestSource(x, y) {
+    let best = -1, bestD = 28; // raio de captura em px
+    sources.forEach((s, i) => {
+        const dx = s.xf * cw - x, dy = s.yf * ch - y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+}
+canvas.addEventListener('pointerdown', e => {
+    const p = pointerPos(e);
+    dragIndex = findNearestSource(p.x, p.y);
+    if (dragIndex >= 0) {
+        canvas.style.cursor = 'grabbing';
+        canvas.setPointerCapture(e.pointerId);
+    }
+});
+canvas.addEventListener('pointermove', e => {
+    if (dragIndex < 0) return;
+    const p = pointerPos(e);
+    sources[dragIndex].xf = Math.min(1, Math.max(0, p.x / cw));
+    sources[dragIndex].yf = Math.min(1, Math.max(0, p.y / ch));
+});
+canvas.addEventListener('pointerup', () => {
+    dragIndex = -1;
+    canvas.style.cursor = 'grab';
+});
+canvas.addEventListener('pointerleave', () => {
+    dragIndex = -1;
+    canvas.style.cursor = 'grab';
+});
+
+// --- controles ---
+pauseBtn.addEventListener('click', () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? 'continuar' : 'pausar';
+});
+resetBtn.addEventListener('click', () => {
+    simTime = 0;
+    layoutSources();
+});
+nEl.addEventListener('input', () => {
+    updateLabels();
+    layoutSources();
+});
+[freqEl, dfEl, vEl, contrastEl].forEach(inp => inp.addEventListener('input', updateLabels));
+speedEl.addEventListener('input', updateLabels);
+
+chladniChk.addEventListener('change', () => {
+    const on = chladniChk.checked;
+    // nós só ficam fixos se todas as fontes tiverem a mesma frequência,
+    // então trava Δf em 0 e desliga o controle de velocidade da simulação
+    // (o padrão é estático — não há "tempo" pra acelerar)
+    dfEl.disabled = on;
+    speedEl.disabled = on;
+    dfCtrl.style.opacity = on ? 0.35 : 1;
+    speedCtrl.style.opacity = on ? 0.35 : 1;
+    if (on) {
+        dfEl.value = 0;
+        updateLabels();
+        hint.textContent = 'padrão fixo — nós = claro (silêncio), antinós = escuro (vibração)';
+    } else {
+        hint.textContent = 'arraste as fontes no canvas';
+    }
+});
+
+// inicialização
+resize();
+</script>
+</body>
+</html>

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Problema dos 3 Corpos</title>
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        color: #ddd;
+        font-family: monospace;
+        overflow: hidden;
+    }
+    #app {
+        display: flex;
+        height: 100%;
+    }
+    #canvasWrap {
+        flex: 1;
+        position: relative;
+        min-width: 0;
+    }
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+        cursor: grab;
+    }
+    #hint {
+        position: absolute;
+        bottom: 8px;
+        left: 10px;
+        font-size: 11px;
+        color: #666;
+        pointer-events: none;
+    }
+    #sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        background: #000;
+        border-left: 1px solid #333;
+        padding: 14px 12px;
+        overflow-y: auto;
+    }
+    #sidebar h2 {
+        font-size: 13px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #fff;
+        margin: 0 0 14px 0;
+        font-weight: normal;
+    }
+    .ctrl { margin-bottom: 12px; }
+    .ctrl label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 3px;
+    }
+    .ctrl label span.val { color: #6cf; }
+    .ctrl input[type=range] { width: 100%; }
+    .ctrl.check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #999;
+    }
+    .btnrow { display: flex; gap: 6px; margin-top: 16px; }
+    button {
+        flex: 1;
+        background: #111;
+        color: #ccc;
+        border: 1px solid #444;
+        padding: 6px 4px;
+        cursor: pointer;
+        font-family: monospace;
+        font-size: 11px;
+    }
+    button:hover { background: #222; }
+    a.back {
+        display: block;
+        color: #6cf;
+        text-decoration: none;
+        font-size: 11px;
+        margin-bottom: 16px;
+    }
+
+    @media (max-width: 700px) {
+        #app { flex-direction: column; }
+        #sidebar {
+            width: 100%;
+            height: 42%;
+            border-left: none;
+            border-top: 1px solid #333;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 12px;
+            align-content: start;
+        }
+        #sidebar h2 { grid-column: 1 / -1; margin-bottom: 8px; }
+        .btnrow { grid-column: 1 / -1; }
+    }
+</style>
+</head>
+<body>
+
+<div id="app">
+    <div id="canvasWrap">
+        <canvas id="c"></canvas>
+        <div id="hint">arraste os corpos no canvas</div>
+    </div>
+    <div id="sidebar">
+        <a class="back" href="../index.html">&larr; voltar</a>
+        <h2>Controladores</h2>
+
+        <div class="ctrl">
+            <label>n° corpos <span class="val" id="nVal">3</span></label>
+            <input id="n" type="range" min="2" max="8" step="1" value="3">
+        </div>
+        <div class="ctrl">
+            <label>gravidade (G) <span class="val" id="gVal">800</span></label>
+            <input id="g" type="range" min="100" max="3000" step="50" value="800">
+        </div>
+        <div class="ctrl">
+            <label>massa base <span class="val" id="massVal">18</span></label>
+            <input id="mass" type="range" min="4" max="40" step="1" value="18">
+        </div>
+        <div class="ctrl">
+            <label>velocidade inicial <span class="val" id="kickVal">60</span></label>
+            <input id="kick" type="range" min="0" max="150" step="5" value="60">
+        </div>
+        <div class="ctrl">
+            <label>velocidade da simulação <span class="val" id="speedVal">1.0x</span></label>
+            <input id="speed" type="range" min="0.1" max="4" step="0.1" value="1">
+        </div>
+        <div class="ctrl check">
+            <input id="compare" type="checkbox" checked>
+            <label style="margin:0;" for="compare">comparar (sensibilidade)</label>
+        </div>
+        <div class="ctrl" id="epsCtrl">
+            <label>Δ perturbação inicial <span class="val" id="epsVal">1.5</span></label>
+            <input id="eps" type="range" min="0.1" max="10" step="0.1" value="1.5">
+        </div>
+        <div class="ctrl check">
+            <input id="trail" type="checkbox" checked>
+            <label style="margin:0;" for="trail">rastro</label>
+        </div>
+
+        <div class="btnrow">
+            <button id="pause">pausar</button>
+            <button id="reset">reiniciar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const canvasWrap = document.getElementById('canvasWrap');
+
+let cw = 0, ch = 0, originX = 0, originY = 0;
+
+function resize() {
+    const rect = canvasWrap.getBoundingClientRect();
+    cw = Math.max(1, Math.round(rect.width));
+    ch = Math.max(1, Math.round(rect.height));
+    canvas.width = cw;
+    canvas.height = ch;
+    originX = cw / 2;
+    originY = ch / 2;
+}
+new ResizeObserver(resize).observe(canvasWrap);
+
+const el = id => document.getElementById(id);
+const nEl = el('n'), gEl = el('g'), massEl = el('mass'), kickEl = el('kick'),
+      speedEl = el('speed'), compareChk = el('compare'), epsEl = el('eps'), trailChk = el('trail');
+const nVal = el('nVal'), gVal = el('gVal'), massVal = el('massVal'), kickVal = el('kickVal'),
+      speedVal = el('speedVal'), epsVal = el('epsVal');
+const epsCtrl = el('epsCtrl'), hint = el('hint');
+const pauseBtn = el('pause'), resetBtn = el('reset');
+
+let paused = false;
+let bodies = [];    // sistema principal (arrastável)
+let shadow = [];     // cópia levemente perturbada, pra mostrar divergência
+let dragIndex = -1;
+
+const SOFTEN = 14; // suaviza a força pra evitar singularidade em encontros próximos
+
+function colorFor(i, total) {
+    const hue = total <= 1 ? 200 : (i / total) * 300;
+    return `hsl(${hue}, 85%, 62%)`;
+}
+
+function makeBodies() {
+    const n = parseInt(nEl.value);
+    const massBase = parseFloat(massEl.value);
+    const kick = parseFloat(kickEl.value);
+    const R = Math.min(cw, ch) * 0.22;
+
+    const arr = [];
+    for (let i = 0; i < n; i++) {
+        const ang = (i / n) * Math.PI * 2 + Math.random() * 0.3;
+        const r = R * (0.7 + Math.random() * 0.6);
+        const m = massBase * (0.5 + Math.random());
+        const x = Math.cos(ang) * r;
+        const y = Math.sin(ang) * r;
+        // velocidade tangencial (perpendicular ao raio) pra tender a órbitas
+        const tang = kick * (0.6 + Math.random() * 0.8);
+        const vx = -Math.sin(ang) * tang;
+        const vy = Math.cos(ang) * tang;
+        arr.push({ x, y, vx, vy, m, color: colorFor(i, n), trail: [] });
+    }
+
+    // zera o momento total do sistema, assim o centro de massa fica
+    // parado na origem pra sempre (nada de câmera indo embora da tela)
+    let totalM = 0, px = 0, py = 0;
+    for (const b of arr) { totalM += b.m; px += b.m * b.vx; py += b.m * b.vy; }
+    const vcx = px / totalM, vcy = py / totalM;
+    for (const b of arr) { b.vx -= vcx; b.vy -= vcy; }
+
+    return arr;
+}
+
+function cloneWithPerturbation(src, eps) {
+    const arr = src.map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, m: b.m, color: b.color, trail: [] }));
+    if (arr.length > 0) arr[0].x += eps;
+    return arr;
+}
+
+function resetSystem() {
+    bodies = makeBodies();
+    shadow = cloneWithPerturbation(bodies, parseFloat(epsEl.value));
+}
+resetSystem();
+
+function computeAcc(arr) {
+    const G = parseFloat(gEl.value);
+    const n = arr.length;
+    const acc = new Array(n);
+    for (let i = 0; i < n; i++) acc[i] = { ax: 0, ay: 0 };
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            const dx = arr[j].x - arr[i].x;
+            const dy = arr[j].y - arr[i].y;
+            const d2 = dx * dx + dy * dy + SOFTEN * SOFTEN;
+            const invD3 = 1 / (Math.sqrt(d2) * d2);
+            const fx = G * dx * invD3;
+            const fy = G * dy * invD3;
+            acc[i].ax += fx * arr[j].m;
+            acc[i].ay += fy * arr[j].m;
+            acc[j].ax -= fx * arr[i].m;
+            acc[j].ay -= fy * arr[i].m;
+        }
+    }
+    return acc;
+}
+
+function stepSystem(arr, dt) {
+    const a0 = computeAcc(arr);
+    for (let i = 0; i < arr.length; i++) {
+        arr[i].vx += 0.5 * a0[i].ax * dt;
+        arr[i].vy += 0.5 * a0[i].ay * dt;
+    }
+    for (const b of arr) {
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+    }
+    const a1 = computeAcc(arr);
+    for (let i = 0; i < arr.length; i++) {
+        arr[i].vx += 0.5 * a1[i].ax * dt;
+        arr[i].vy += 0.5 * a1[i].ay * dt;
+    }
+}
+
+function updateLabels() {
+    nVal.textContent = nEl.value;
+    gVal.textContent = gEl.value;
+    massVal.textContent = massEl.value;
+    kickVal.textContent = kickEl.value;
+    speedVal.textContent = parseFloat(speedEl.value).toFixed(1) + 'x';
+    epsVal.textContent = parseFloat(epsEl.value).toFixed(1);
+}
+updateLabels();
+
+function radiusFor(m) {
+    return 2.5 + Math.cbrt(m) * 2;
+}
+
+function drawSet(arr, alpha) {
+    for (const b of arr) {
+        const x = originX + b.x, y = originY + b.y;
+
+        if (trailChk.checked) {
+            b.trail.push({ x, y });
+            if (b.trail.length > 500) b.trail.shift();
+            ctx.beginPath();
+            for (let i = 0; i < b.trail.length; i++) {
+                const p = b.trail[i];
+                if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+            }
+            ctx.strokeStyle = b.color;
+            ctx.globalAlpha = 0.35 * alpha;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(x, y, radiusFor(b.m), 0, Math.PI * 2);
+        ctx.fillStyle = b.color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+function loop() {
+    if (!trailChk.checked) {
+        ctx.clearRect(0, 0, cw, ch);
+    } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.fillRect(0, 0, cw, ch);
+    }
+
+    if (!paused) {
+        const speed = parseFloat(speedEl.value);
+        const baseDt = 0.006;
+        const steps = Math.max(1, Math.round(4 * speed));
+        for (let s = 0; s < steps; s++) {
+            stepSystem(bodies, baseDt);
+            if (compareChk.checked) stepSystem(shadow, baseDt);
+        }
+    }
+
+    if (compareChk.checked) drawSet(shadow, 0.35);
+    drawSet(bodies, 1);
+
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// --- interação: arrastar corpos (só o sistema principal) ---
+function pointerPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const p = evt.touches ? evt.touches[0] : evt;
+    return { x: p.clientX - rect.left, y: p.clientY - rect.top };
+}
+function findNearestBody(x, y) {
+    let best = -1, bestD = 30;
+    bodies.forEach((b, i) => {
+        const dx = originX + b.x - x, dy = originY + b.y - y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+}
+canvas.addEventListener('pointerdown', e => {
+    const p = pointerPos(e);
+    dragIndex = findNearestBody(p.x, p.y);
+    if (dragIndex >= 0) {
+        canvas.style.cursor = 'grabbing';
+        canvas.setPointerCapture(e.pointerId);
+    }
+});
+canvas.addEventListener('pointermove', e => {
+    if (dragIndex < 0) return;
+    const p = pointerPos(e);
+    bodies[dragIndex].x = p.x - originX;
+    bodies[dragIndex].y = p.y - originY;
+    bodies[dragIndex].vx = 0;
+    bodies[dragIndex].vy = 0;
+});
+canvas.addEventListener('pointerup', () => {
+    dragIndex = -1;
+    canvas.style.cursor = 'grab';
+});
+canvas.addEventListener('pointerleave', () => {
+    dragIndex = -1;
+    canvas.style.cursor = 'grab';
+});
+
+// --- controles ---
+pauseBtn.addEventListener('click', () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? 'continuar' : 'pausar';
+});
+resetBtn.addEventListener('click', () => {
+    ctx.clearRect(0, 0, cw, ch);
+    resetSystem();
+});
+[nEl, massEl, kickEl].forEach(inp => inp.addEventListener('input', () => {
+    updateLabels();
+    ctx.clearRect(0, 0, cw, ch);
+    resetSystem();
+}));
+gEl.addEventListener('input', updateLabels);
+speedEl.addEventListener('input', updateLabels);
+epsEl.addEventListener('input', () => {
+    updateLabels();
+});
+epsEl.addEventListener('change', () => {
+    ctx.clearRect(0, 0, cw, ch);
+    resetSystem();
+});
+compareChk.addEventListener('change', () => {
+    epsCtrl.style.opacity = compareChk.checked ? 1 : 0.35;
+    epsEl.disabled = !compareChk.checked;
+    if (compareChk.checked) {
+        shadow = cloneWithPerturbation(bodies, parseFloat(epsEl.value));
+    }
+});
+
+// inicialização
+resize();
+resetSystem();
+</script>
+</body>
+</html>
