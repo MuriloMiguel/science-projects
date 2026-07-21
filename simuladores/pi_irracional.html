@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>π é Irracional — Visualização</title>
+<style>
+    html, body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        color: #ccc;
+        font-family: monospace;
+        overflow: hidden;
+    }
+    #bar {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        align-items: center;
+        padding: 8px 12px;
+        background: #111;
+        border-bottom: 1px solid #333;
+        font-size: 12px;
+        z-index: 10;
+    }
+    #bar h1 {
+        font-size: 13px;
+        font-weight: normal;
+        color: #eee;
+        margin: 0 6px 0 0;
+        white-space: nowrap;
+        letter-spacing: 0.3px;
+    }
+    #bar label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    #bar input[type=range] { width: 90px; accent-color: #6cf; }
+    #bar span.val { min-width: 3.5em; display: inline-block; color: #6cf; }
+    #bar button {
+        background: #1a1a1a;
+        color: #ccc;
+        border: 1px solid #444;
+        border-radius: 3px;
+        padding: 4px 10px;
+        font-family: monospace;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    #bar button:hover { background: #262626; border-color: #666; }
+    #bar button.active { border-color: #6cf; color: #6cf; }
+    #bar .sep { width: 1px; height: 18px; background: #333; margin: 0 2px; }
+    #bar .presets { display: flex; gap: 4px; flex-wrap: wrap; }
+    #bar .presets button { padding: 3px 7px; font-size: 11px; }
+    #bar input[type=checkbox] { accent-color: #6cf; }
+
+    #stage {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+    }
+    canvas { position: absolute; top: 0; left: 0; }
+
+    #info {
+        position: fixed;
+        left: 12px; bottom: 12px;
+        font-size: 12px;
+        color: #888;
+        line-height: 1.6;
+        background: rgba(0,0,0,0.55);
+        padding: 8px 10px;
+        border: 1px solid #222;
+        border-radius: 4px;
+        max-width: 300px;
+        pointer-events: none;
+    }
+    #info b { color: #ccc; }
+    #info .k-status { color: #6cf; }
+    #info .closed { color: #6f6; }
+
+    #formula {
+        position: fixed;
+        right: 16px; bottom: 14px;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-style: italic;
+        font-size: 22px;
+        color: #eee;
+        pointer-events: none;
+        text-align: right;
+    }
+    #formula sub { font-style: italic; }
+
+    #flash {
+        position: fixed;
+        top: 46%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 26px;
+        color: #6f6;
+        text-shadow: 0 0 12px rgba(102,255,102,0.6);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        z-index: 5;
+        font-family: monospace;
+    }
+
+    @media (max-width: 720px) {
+        #formula { font-size: 16px; }
+        #info { max-width: 220px; font-size: 11px; }
+    }
+</style>
+</head>
+<body>
+
+<div id="bar">
+    <h1>π irracional — epiciclos</h1>
+
+    <button id="btnPlay">⏸ pausar</button>
+    <button id="btnReset">⟲ reiniciar</button>
+
+    <div class="sep"></div>
+
+    <div class="presets" id="presets"></div>
+
+    <div class="sep"></div>
+
+    <label>k <input type="range" id="kSlider" min="1" max="6" step="0.0001"><span class="val" id="kVal"></span></label>
+    <label>velocidade <input type="range" id="speedSlider" min="0.1" max="6" step="0.1"><span class="val" id="speedVal"></span></label>
+    <label>braço 1 <input type="range" id="r1Slider" min="20" max="260" step="1"><span class="val" id="r1Val"></span></label>
+    <label>braço 2 <input type="range" id="r2Slider" min="10" max="220" step="1"><span class="val" id="r2Val"></span></label>
+
+    <div class="sep"></div>
+
+    <label><input type="checkbox" id="chkArms" checked> mostrar braços</label>
+    <label><input type="checkbox" id="chkFade"> esmaecer rastro</label>
+</div>
+
+<div id="stage">
+    <canvas id="trail"></canvas>
+    <canvas id="main"></canvas>
+</div>
+
+<div id="info">
+    <div><b>voltas do braço 1:</b> <span id="voltas">0.0</span></div>
+    <div><b>k:</b> <span id="kInfo"></span></div>
+    <div class="k-status" id="kStatus"></div>
+</div>
+
+<div id="formula">z(θ) = e<sup>θi</sup> + e<sup>kθi</sup></div>
+<div id="flash"></div>
+
+<script>
+(function(){
+    const trailCanvas = document.getElementById('trail');
+    const mainCanvas = document.getElementById('main');
+    const trailCtx = trailCanvas.getContext('2d');
+    const mainCtx = mainCanvas.getContext('2d');
+    const stage = document.getElementById('stage');
+
+    const btnPlay = document.getElementById('btnPlay');
+    const btnReset = document.getElementById('btnReset');
+    const kSlider = document.getElementById('kSlider');
+    const kVal = document.getElementById('kVal');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedVal = document.getElementById('speedVal');
+    const r1Slider = document.getElementById('r1Slider');
+    const r1Val = document.getElementById('r1Val');
+    const r2Slider = document.getElementById('r2Slider');
+    const r2Val = document.getElementById('r2Val');
+    const chkArms = document.getElementById('chkArms');
+    const chkFade = document.getElementById('chkFade');
+    const presetsWrap = document.getElementById('presets');
+    const voltasEl = document.getElementById('voltas');
+    const kInfoEl = document.getElementById('kInfo');
+    const kStatusEl = document.getElementById('kStatus');
+    const flashEl = document.getElementById('flash');
+
+    // presets: [label, value, [p,q] ou null se irracional]
+    const PRESETS = [
+        ['π', Math.PI, null],
+        ['e', Math.E, null],
+        ['φ', (1+Math.sqrt(5))/2, null],
+        ['√2', Math.SQRT2, null],
+        ['22/7', 22/7, [22,7]],
+        ['355/113', 355/113, [355,113]],
+        ['3/2', 1.5, [3,2]],
+        ['2', 2, [2,1]],
+    ];
+    PRESETS.forEach(p => {
+        const b = document.createElement('button');
+        b.textContent = p[0];
+        b.title = p[2] ? 'racional — fecha após ' + p[2][1] + ' volta(s)' : 'irracional — nunca fecha';
+        b.addEventListener('click', () => setK(p[1], p[2], b));
+        presetsWrap.appendChild(b);
+    });
+
+    let width, height, dpr;
+    function resize(){
+        dpr = window.devicePixelRatio || 1;
+        width = stage.clientWidth;
+        height = stage.clientHeight;
+        [trailCanvas, mainCanvas].forEach(c => {
+            c.width = width * dpr;
+            c.height = height * dpr;
+            c.style.width = width + 'px';
+            c.style.height = height + 'px';
+            c.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+        });
+        clearTrail();
+    }
+
+    function clearTrail(){
+        trailCtx.clearRect(0,0,width,height);
+        trailCtx.fillStyle = '#000';
+        trailCtx.fillRect(0,0,width,height);
+    }
+
+    // ---- estado ----
+    let theta = 0;
+    let running = true;
+    let speed = 1.5;          // rad/s de theta
+    let k = Math.PI;
+    let kFrac = null;
+    let R1 = 140, R2 = 90;
+    let showArms = true;
+    let fadeTrail = false;
+    const fadeStrength = 0.015;
+    let prevPoint = null;
+    let nextClose = null;
+    let flashTimer = 0;
+
+    function center(){ return { x: width/2, y: height/2 }; }
+
+    function setK(value, frac, btnEl){
+        k = value;
+        kFrac = frac;
+        kSlider.value = value;
+        updateKLabels();
+        [...presetsWrap.children].forEach(b => b.classList.remove('active'));
+        if(btnEl) btnEl.classList.add('active');
+        reset();
+    }
+
+    function updateKLabels(){
+        kVal.textContent = k.toFixed(4);
+        kInfoEl.textContent = k.toFixed(6) + (kFrac ? '  (' + kFrac[0] + '/' + kFrac[1] + ')' : '');
+        if(kFrac){
+            nextClose = 2*Math.PI*kFrac[1];
+            kStatusEl.textContent = 'racional — deve fechar em θ = 2π × ' + kFrac[1];
+            kStatusEl.classList.remove('closed');
+        } else {
+            nextClose = null;
+            kStatusEl.textContent = 'irracional — nunca fecha exatamente';
+        }
+    }
+
+    function reset(){
+        theta = 0;
+        prevPoint = null;
+        clearTrail();
+        flashTimer = 0;
+        flashEl.style.opacity = 0;
+        if(kFrac) nextClose = 2*Math.PI*kFrac[1];
+        drawPoint(); // desenha braços na posição inicial
+    }
+
+    function flash(msg){
+        flashEl.textContent = msg;
+        flashEl.style.opacity = 1;
+        flashTimer = 1.6;
+    }
+
+    function drawPoint(){
+        const c = center();
+        const x1 = c.x + R1*Math.cos(theta);
+        const y1 = c.y + R1*Math.sin(theta);
+        const x2 = x1 + R2*Math.cos(k*theta);
+        const y2 = y1 + R2*Math.sin(k*theta);
+
+        if(prevPoint){
+            trailCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+            trailCtx.lineWidth = 1;
+            trailCtx.beginPath();
+            trailCtx.moveTo(prevPoint.x, prevPoint.y);
+            trailCtx.lineTo(x2, y2);
+            trailCtx.stroke();
+        }
+        prevPoint = { x: x2, y: y2 };
+
+        mainCtx.clearRect(0,0,width,height);
+        if(showArms){
+            mainCtx.strokeStyle = 'rgba(255,120,90,0.9)';
+            mainCtx.lineWidth = 1.4;
+            mainCtx.beginPath();
+            mainCtx.moveTo(c.x, c.y);
+            mainCtx.lineTo(x1, y1);
+            mainCtx.stroke();
+
+            mainCtx.strokeStyle = 'rgba(120,190,255,0.9)';
+            mainCtx.beginPath();
+            mainCtx.moveTo(x1, y1);
+            mainCtx.lineTo(x2, y2);
+            mainCtx.stroke();
+
+            // guia circular do primeiro braço
+            mainCtx.strokeStyle = 'rgba(255,120,90,0.15)';
+            mainCtx.beginPath();
+            mainCtx.arc(c.x, c.y, R1, 0, 2*Math.PI);
+            mainCtx.stroke();
+
+            // guia circular do segundo braço
+            mainCtx.strokeStyle = 'rgba(120,190,255,0.15)';
+            mainCtx.beginPath();
+            mainCtx.arc(x1, y1, R2, 0, 2*Math.PI);
+            mainCtx.stroke();
+
+            mainCtx.fillStyle = '#ff785a';
+            mainCtx.beginPath();
+            mainCtx.arc(x1, y1, 2.5, 0, 2*Math.PI);
+            mainCtx.fill();
+        }
+        mainCtx.fillStyle = '#fff';
+        mainCtx.beginPath();
+        mainCtx.arc(x2, y2, 2.5, 0, 2*Math.PI);
+        mainCtx.fill();
+        mainCtx.fillStyle = 'rgba(255,255,255,0.7)';
+        mainCtx.beginPath();
+        mainCtx.arc(c.x, c.y, 2, 0, 2*Math.PI);
+        mainCtx.fill();
+    }
+
+    // ---- loop ----
+    let last = null;
+    const angularStep = 0.012;
+    function frame(ts){
+        if(last === null) last = ts;
+        let dt = (ts - last) / 1000;
+        last = ts;
+        dt = Math.min(dt, 0.05);
+
+        if(running){
+            if(fadeTrail){
+                trailCtx.fillStyle = 'rgba(0,0,0,' + fadeStrength + ')';
+                trailCtx.fillRect(0,0,width,height);
+            }
+            let deltaTheta = speed * dt;
+            let steps = Math.min(1500, Math.max(1, Math.ceil(deltaTheta / angularStep)));
+            let stepTheta = deltaTheta / steps;
+            for(let i=0;i<steps;i++){
+                theta += stepTheta;
+                if(nextClose !== null && theta >= nextClose){
+                    flash('fechou! (θ = 2π × ' + kFrac[1] + ')');
+                    kStatusEl.classList.add('closed');
+                    kStatusEl.textContent = 'fechou em θ = 2π × ' + kFrac[1] + ' — próxima em +' + kFrac[1] + ' voltas';
+                    nextClose += 2*Math.PI*kFrac[1];
+                }
+            }
+            drawPoint();
+            voltasEl.textContent = (theta/(2*Math.PI)).toFixed(2);
+        }
+
+        if(flashTimer > 0){
+            flashTimer -= dt;
+            if(flashTimer <= 0) flashEl.style.opacity = 0;
+        }
+
+        requestAnimationFrame(frame);
+    }
+
+    // ---- controles ----
+    btnPlay.addEventListener('click', () => {
+        running = !running;
+        btnPlay.textContent = running ? '⏸ pausar' : '▶ continuar';
+    });
+    btnReset.addEventListener('click', reset);
+
+    kSlider.addEventListener('input', () => {
+        k = parseFloat(kSlider.value);
+        kFrac = null;
+        [...presetsWrap.children].forEach(b => b.classList.remove('active'));
+        updateKLabels();
+        reset();
+    });
+
+    speedSlider.addEventListener('input', () => {
+        speed = parseFloat(speedSlider.value);
+        speedVal.textContent = speed.toFixed(1);
+    });
+    r1Slider.addEventListener('input', () => {
+        R1 = parseFloat(r1Slider.value);
+        r1Val.textContent = R1.toFixed(0);
+        drawPoint();
+    });
+    r2Slider.addEventListener('input', () => {
+        R2 = parseFloat(r2Slider.value);
+        r2Val.textContent = R2.toFixed(0);
+        drawPoint();
+    });
+    chkArms.addEventListener('change', () => { showArms = chkArms.checked; drawPoint(); });
+    chkFade.addEventListener('change', () => { fadeTrail = chkFade.checked; });
+
+    window.addEventListener('resize', () => { resize(); reset(); });
+
+    // ---- init ----
+    kSlider.value = k;
+    speedSlider.value = speed;
+    r1Slider.value = R1;
+    r2Slider.value = R2;
+    speedVal.textContent = speed.toFixed(1);
+    r1Val.textContent = R1.toFixed(0);
+    r2Val.textContent = R2.toFixed(0);
+    updateKLabels();
+    presetsWrap.children[0].classList.add('active'); // π ativo por padrão
+
+    resize();
+    reset();
+    requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
