@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compressão e Expansão de Gases — Colisão de Partículas</title>
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        color: #ddd;
+        font-family: monospace;
+        overflow: hidden;
+    }
+    #app {
+        display: flex;
+        height: 100%;
+    }
+    #canvasWrap {
+        flex: 1;
+        position: relative;
+        min-width: 0;
+    }
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    #sidebar {
+        width: 230px;
+        flex-shrink: 0;
+        background: #000;
+        border-left: 1px solid #333;
+        padding: 14px 12px;
+        overflow-y: auto;
+    }
+    #sidebar h2 {
+        font-size: 13px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #fff;
+        margin: 0 0 14px 0;
+        font-weight: normal;
+    }
+    #sidebar h2.sub {
+        margin: 18px 0 10px 0;
+        padding-top: 14px;
+        border-top: 1px solid #333;
+    }
+    .readout {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #999;
+        margin-bottom: 8px;
+    }
+    .readout .val {
+        font-size: 13px;
+        transition: color .15s;
+    }
+    .ctrl {
+        margin-bottom: 12px;
+    }
+    .ctrl label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 3px;
+    }
+    .ctrl label span.val { color: #6cf; }
+    .ctrl input[type=range] { width: 100%; }
+    .btnrow {
+        display: flex;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    button { font-family: monospace; }
+    .btnrow button {
+        flex: 1;
+        background: #111;
+        color: #ccc;
+        border: 1px solid #444;
+        padding: 7px 4px;
+        cursor: pointer;
+        font-size: 11px;
+    }
+    .btnrow button:hover { background: #222; }
+    .btnrow button.active { color: #fff; border-color: #f66; }
+    .btnrow button.active#expandBtn { border-color: #6cf; }
+    .btnrow button:disabled { opacity: .35; cursor: default; }
+    .note {
+        font-size: 10.5px;
+        color: #666;
+        line-height: 1.6;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid #333;
+    }
+    .note b { color: #999; font-weight: normal; }
+    #legend {
+        display: flex;
+        gap: 12px;
+        font-size: 10px;
+        color: #666;
+        position: absolute;
+        left: 14px;
+        top: 12px;
+    }
+    #legend span { display: flex; align-items: center; gap: 4px; }
+    #legend i { width: 7px; height: 7px; display: inline-block; border-radius: 50%; }
+    #graphLabel {
+        position: absolute;
+        left: 14px;
+        font-size: 10px;
+        color: #555;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+    @media (max-width: 700px) {
+        #app { flex-direction: column; }
+        #sidebar {
+            width: 100%;
+            height: 46%;
+            border-left: none;
+            border-top: 1px solid #333;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 12px;
+            align-content: start;
+        }
+        #sidebar h2, #sidebar h2.sub { grid-column: 1 / -1; }
+        .readout, .btnrow, .note { grid-column: 1 / -1; }
+    }
+</style>
+</head>
+<body>
+
+<div id="app">
+    <div id="canvasWrap">
+        <canvas id="c"></canvas>
+        <div id="legend">
+            <span><i style="background:#3fb6ff"></i>lenta / fria</span>
+            <span><i style="background:#ff5a36"></i>rápida / quente</span>
+        </div>
+        <div id="graphLabel">temperatura no tempo</div>
+    </div>
+    <div id="sidebar">
+        <h2>Estado do gás</h2>
+        <div class="readout"><span>temperatura</span><span class="val" id="tempVal">300 K</span></div>
+        <div class="readout"><span>pressão</span><span class="val" id="presVal">2.46 atm</span></div>
+        <div class="readout"><span>pistão</span><span class="val" id="pistonVal">0% comprimido</span></div>
+
+        <h2 class="sub">Pistão</h2>
+        <div class="ctrl">
+            <label>posição <span class="val" id="pistonSliderVal">0%</span></label>
+            <input id="piston" type="range" min="0" max="92" step="1" value="0">
+        </div>
+        <div class="btnrow">
+            <button id="compressBtn">▲ comprimir</button>
+            <button id="expandBtn">▼ descomprimir</button>
+        </div>
+        <div class="btnrow">
+            <button id="stopBtn" disabled>◼ parar</button>
+            <button id="resetBtn">↺ reiniciar</button>
+        </div>
+        <div class="ctrl" style="margin-top:14px;">
+            <label>velocidade do pistão <span class="val" id="speedVal">1.0x</span></label>
+            <input id="speed" type="range" min="0.2" max="3" step="0.1" value="1">
+        </div>
+        <div class="ctrl">
+            <label>perda no pistão <span class="val" id="pistonLossVal">0%</span></label>
+            <input id="pistonLoss" type="range" min="0" max="100" step="1" value="0">
+        </div>
+        <div class="ctrl">
+            <label>atrito com o ambiente <span class="val" id="frictionVal">0%</span></label>
+            <input id="friction" type="range" min="0" max="100" step="1" value="0">
+        </div>
+
+        <h2 class="sub">Gás</h2>
+        <div class="ctrl">
+            <label>partículas <span class="val" id="npVal">70</span></label>
+            <input id="np" type="range" min="15" max="160" step="1" value="70">
+        </div>
+        <div class="ctrl">
+            <label>temperatura inicial <span class="val" id="t0Val">300 K</span></label>
+            <input id="t0" type="range" min="200" max="450" step="5" value="300">
+        </div>
+
+        <p class="note">
+            As esferas colidem entre si e com o pistão — comprimindo, ele empurra as
+            partículas e aumenta a velocidade delas; descomprimindo, ele recua e elas
+            perdem velocidade. <b>Perda no pistão</b> reduz o quanto essa colisão
+            transfere (pistão menos eficiente mecanicamente). <b>Atrito com o
+            ambiente</b> é um vazamento de calor pelas paredes, proporcional à área
+            de contato: câmara expandida tem mais parede exposta e esfria mais
+            rápido; comprimida, quase não perde. Os dois em 0% = sistema isolado
+            (adiabático puro).
+        </p>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const canvasWrap = document.getElementById('canvasWrap');
+
+function resize() {
+    const rect = canvasWrap.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+    }
+}
+new ResizeObserver(resize).observe(canvasWrap);
+resize();
+
+const el = id => document.getElementById(id);
+const pistonEl = el('piston'), pistonSliderVal = el('pistonSliderVal'), pistonVal = el('pistonVal');
+const speedEl = el('speed'), speedVal = el('speedVal');
+const pistonLossEl = el('pistonLoss'), pistonLossVal = el('pistonLossVal');
+const frictionEl = el('friction'), frictionVal = el('frictionVal');
+const npEl = el('np'), npVal = el('npVal');
+const t0El = el('t0'), t0Val = el('t0Val');
+const tempVal = el('tempVal'), presVal = el('presVal');
+const compressBtn = el('compressBtn'), expandBtn = el('expandBtn'), stopBtn = el('stopBtn'), resetBtn = el('resetBtn');
+const graphLabel = el('graphLabel');
+
+const R = 0.0821, n = 1;
+const Vmax = 10.0, Vmin = 2.0;
+const PISTON_MAX = 92;
+const TEMP_SCALE = 300 / (2 * 1.2 * 1.2);
+
+let T0 = 300;
+let pistonLossRate = 0;
+let frictionRate = 0;
+let pistonPct = 0;
+let animDir = 0;
+let speed = 1.0;
+let elapsed = 0;
+let lastFrame = null;
+
+let particles = [];
+let radius = 3;
+
+function sigmaFor(temp) {
+    return Math.sqrt(Math.max(temp, 20) / (2 * TEMP_SCALE));
+}
+
+function gasBounds() {
+    const pad = 30;
+    const chamberTop = pad;
+    const chamberH = canvas.height * 0.58 - pad * 1.6;
+    const chamberW = canvas.width - pad * 2;
+    const gasFrac = 1 - pistonPct / 100;
+    const gasW = chamberW * (0.18 + 0.82 * gasFrac);
+    return { pad, chamberTop, chamberH, chamberW, gasW, pistonX: pad + gasW };
+}
+
+function rebuildParticles(count) {
+    const b = gasBounds();
+    radius = Math.max(1.8, Math.min(3.4, 340 / count));
+    particles = [];
+    const sigma = sigmaFor(T0);
+    for (let i = 0; i < count; i++) {
+        const x = b.pad + radius + Math.random() * Math.max(4, (b.gasW - 2 * radius));
+        const y = b.chamberTop + radius + Math.random() * Math.max(4, (b.chamberH - 2 * radius));
+        const vx = gauss() * sigma;
+        const vy = gauss() * sigma;
+        particles.push({ x, y, vx, vy });
+    }
+}
+
+function gauss() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+rebuildParticles(parseInt(npEl.value));
+
+let currentT = T0;
+let currentV = Vmax;
+let currentP = n * R * T0 / Vmax;
+const history = [];
+
+function fmt(x, d) { return x.toFixed(d); }
+
+function tempColor(t) {
+    const lo = T0 - 90, hi = T0 + 320;
+    let f = (t - lo) / (hi - lo);
+    f = Math.max(0, Math.min(1, f));
+    const cold = [63, 182, 255], hot = [255, 90, 54];
+    const r = Math.round(cold[0] + (hot[0] - cold[0]) * f);
+    const g = Math.round(cold[1] + (hot[1] - cold[1]) * f);
+    const b = Math.round(cold[2] + (hot[2] - cold[2]) * f);
+    return `rgb(${r},${g},${b})`;
+}
+
+function stepPhysics() {
+    const b = gasBounds();
+    const prevPistonX = stepPhysics.prevPistonX == null ? b.pistonX : stepPhysics.prevPistonX;
+    let pistonVel = b.pistonX - prevPistonX;
+    pistonVel = Math.max(-6, Math.min(6, pistonVel));
+    stepPhysics.prevPistonX = b.pistonX;
+
+    const pistonEff = 1 - pistonLossRate;
+    for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x - radius < b.pad) { p.x = b.pad + radius; p.vx = Math.abs(p.vx); }
+        if (p.y - radius < b.chamberTop) { p.y = b.chamberTop + radius; p.vy = Math.abs(p.vy); }
+        if (p.y + radius > b.chamberTop + b.chamberH) { p.y = b.chamberTop + b.chamberH - radius; p.vy = -Math.abs(p.vy); }
+
+        if (p.x + radius > b.pistonX) {
+            p.vx = -p.vx + 2 * pistonVel * pistonEff;
+            const speedMag = Math.hypot(p.vx, p.vy);
+            const cap = 14;
+            if (speedMag > cap) { p.vx *= cap / speedMag; p.vy *= cap / speedMag; }
+            p.x = b.pistonX - radius;
+        }
+    }
+
+    for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+            const a = particles[i], c = particles[j];
+            const dx = c.x - a.x, dy = c.y - a.y;
+            const dist2 = dx * dx + dy * dy;
+            const minDist = radius * 2;
+            if (dist2 < minDist * minDist && dist2 > 0.0001) {
+                const dist = Math.sqrt(dist2);
+                const nx = dx / dist, ny = dy / dist;
+                const overlap = (minDist - dist) / 2;
+                a.x -= nx * overlap; a.y -= ny * overlap;
+                c.x += nx * overlap; c.y += ny * overlap;
+
+                const v1n = a.vx * nx + a.vy * ny;
+                const v2n = c.vx * nx + c.vy * ny;
+                if (v2n - v1n < 0) {
+                    a.vx += (v2n - v1n) * nx; a.vy += (v2n - v1n) * ny;
+                    c.vx += (v1n - v2n) * nx; c.vy += (v1n - v2n) * ny;
+                }
+            }
+        }
+    }
+
+    if (frictionRate > 0) {
+        let sq = 0;
+        for (const p of particles) sq += p.vx * p.vx + p.vy * p.vy;
+        const meanSq = sq / particles.length;
+        const targetSigma = sigmaFor(T0);
+        const targetMeanSq = 2 * targetSigma * targetSigma;
+
+        const wallArea = 2 * b.gasW + 2 * b.chamberH;
+        const wallAreaMax = 2 * b.chamberW + 2 * b.chamberH;
+        const areaFactor = wallArea / wallAreaMax;
+
+        const pull = frictionRate * 0.06 * areaFactor;
+        const newMeanSq = meanSq + (targetMeanSq - meanSq) * pull;
+        const scale = Math.sqrt(newMeanSq / Math.max(meanSq, 1e-6));
+        for (const p of particles) { p.vx *= scale; p.vy *= scale; }
+    }
+
+    let sumSq = 0;
+    for (const p of particles) sumSq += p.vx * p.vx + p.vy * p.vy;
+    const meanSq = sumSq / particles.length;
+    currentT = TEMP_SCALE * meanSq;
+    currentV = Vmax - (pistonPct / 100) * (Vmax - Vmin);
+    currentP = n * R * currentT / currentV;
+}
+
+function updateReadouts() {
+    const col = tempColor(currentT);
+    tempVal.textContent = fmt(currentT, 0) + ' K';
+    tempVal.style.color = col;
+    presVal.textContent = fmt(currentP, 2) + ' atm';
+    pistonVal.textContent = Math.round(pistonPct) + '% comprimido';
+    pistonSliderVal.textContent = Math.round(pistonPct) + '%';
+}
+
+function drawChamber(regionH) {
+    const b = gasBounds();
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(b.pad, b.chamberTop, b.chamberW, b.chamberH);
+
+    const col = tempColor(currentT);
+    for (const p of particles) {
+        ctx.beginPath();
+        ctx.fillStyle = col;
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.fillStyle = '#141414';
+    ctx.fillRect(b.pistonX, b.chamberTop - 5, 8, b.chamberH + 10);
+    ctx.strokeStyle = '#555';
+    ctx.strokeRect(b.pistonX, b.chamberTop - 5, 8, b.chamberH + 10);
+    ctx.fillStyle = '#1c1c1c';
+    ctx.fillRect(b.pistonX + 8, b.chamberTop + b.chamberH / 2 - 2, b.chamberW - (b.pistonX + 8 - b.pad), 4);
+}
+
+function drawGraph(top, height) {
+    const w = canvas.width;
+    const pad = { l: 40, r: 16, t: top + 20, b: top + height - 22 };
+    const plotW = w - pad.l - pad.r;
+    const plotH = pad.b - pad.t;
+    const window_ = 20;
+    const tMin = Math.max(0, elapsed - window_);
+
+    while (history.length && history[0].t < tMin - 1) history.shift();
+
+    let lo = T0, hi = T0;
+    for (const h of history) { if (h.T < lo) lo = h.T; if (h.T > hi) hi = h.T; }
+    lo = Math.min(lo, T0) - 10; hi = Math.max(hi, T0) + 10;
+
+    function xOf(t) { return pad.l + ((t - tMin) / window_) * plotW; }
+    function yOf(temp) { return pad.t + (1 - (temp - lo) / (hi - lo)) * plotH; }
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t);
+    ctx.lineTo(pad.l, pad.b);
+    ctx.lineTo(pad.l + plotW, pad.b);
+    ctx.stroke();
+
+    const baseY = yOf(T0);
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, baseY);
+    ctx.lineTo(pad.l + plotW, baseY);
+    ctx.stroke();
+    ctx.fillStyle = '#555';
+    ctx.font = '10px monospace';
+    ctx.fillText(Math.round(T0) + ' K inicial', pad.l + 4, baseY - 4);
+
+    if (history.length > 1) {
+        ctx.strokeStyle = '#f66';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        history.forEach((pt, i) => {
+            const x = xOf(pt.t), y = yOf(pt.T);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    }
+
+    const lastPt = history[history.length - 1];
+    if (lastPt) {
+        ctx.beginPath();
+        ctx.fillStyle = tempColor(lastPt.T);
+        ctx.arc(xOf(lastPt.t), yOf(lastPt.T), 2.8, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function loop(ts) {
+    if (lastFrame == null) lastFrame = ts;
+    const dt = Math.min(0.05, (ts - lastFrame) / 1000);
+    lastFrame = ts;
+    elapsed += dt;
+
+    if (animDir !== 0) {
+        pistonPct += animDir * speed * 55 * dt;
+        pistonPct = Math.max(0, Math.min(PISTON_MAX, pistonPct));
+        pistonEl.value = pistonPct;
+        if (pistonPct <= 0 || pistonPct >= PISTON_MAX) stopAnim();
+    }
+
+    stepPhysics();
+    history.push({ t: elapsed, T: currentT });
+    if (history.length > 1200) history.shift();
+    updateReadouts();
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const h = canvas.height;
+    const chamberRegion = h * 0.58;
+    const graphRegion = h * 0.42;
+    drawChamber(chamberRegion);
+    graphLabel.style.top = (chamberRegion + 4) + 'px';
+    drawGraph(chamberRegion, graphRegion);
+
+    requestAnimationFrame(loop);
+}
+
+function stopAnim() {
+    animDir = 0;
+    stopBtn.disabled = true;
+    compressBtn.classList.remove('active');
+    expandBtn.classList.remove('active');
+}
+function startAnim(dir) {
+    animDir = dir;
+    stopBtn.disabled = false;
+    compressBtn.classList.toggle('active', dir > 0);
+    expandBtn.classList.toggle('active', dir < 0);
+}
+
+compressBtn.addEventListener('click', () => startAnim(1));
+expandBtn.addEventListener('click', () => startAnim(-1));
+stopBtn.addEventListener('click', stopAnim);
+resetBtn.addEventListener('click', () => {
+    stopAnim();
+    pistonPct = 0;
+    pistonEl.value = 0;
+    stepPhysics.prevPistonX = null;
+    history.length = 0;
+    elapsed = 0;
+    rebuildParticles(parseInt(npEl.value));
+});
+
+pistonEl.addEventListener('input', e => {
+    stopAnim();
+    pistonPct = parseFloat(e.target.value);
+});
+
+speedEl.addEventListener('input', e => {
+    speed = parseFloat(e.target.value);
+    speedVal.textContent = speed.toFixed(1) + 'x';
+});
+
+pistonLossEl.addEventListener('input', e => {
+    pistonLossRate = parseFloat(e.target.value) / 100;
+    pistonLossVal.textContent = e.target.value + '%';
+});
+
+frictionEl.addEventListener('input', e => {
+    frictionRate = parseFloat(e.target.value) / 100;
+    frictionVal.textContent = e.target.value + '%';
+});
+
+npEl.addEventListener('input', e => {
+    npVal.textContent = e.target.value;
+});
+npEl.addEventListener('change', e => {
+    rebuildParticles(parseInt(e.target.value));
+});
+
+t0El.addEventListener('input', e => {
+    T0 = parseFloat(e.target.value);
+    t0Val.textContent = Math.round(T0) + ' K';
+});
+t0El.addEventListener('change', () => {
+    stopAnim();
+    pistonPct = 0;
+    pistonEl.value = 0;
+    stepPhysics.prevPistonX = null;
+    history.length = 0;
+    elapsed = 0;
+    rebuildParticles(parseInt(npEl.value));
+});
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
