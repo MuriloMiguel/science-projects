@@ -15,12 +15,16 @@
 
   gtag('config', 'G-HH5337WDNF');
 </script>
+    <script src="nav.js" defer></script>
 </head>
 
 <body>
     <header class="site-header">
         <a class="brand" href="index.html">Murilo Miguel</a>
-        <nav class="main-nav">
+        <button class="nav-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="main-nav">
+            <span></span><span></span><span></span>
+        </button>
+        <nav class="main-nav" id="main-nav">
             <a href="index.html" aria-current="page">Início</a>
             <a href="simuladores.html">Simuladores</a>
             <a href="livros.html">Livros</a>
