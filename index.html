@@ -23,6 +23,7 @@
         <nav class="main-nav">
             <a href="index.html" aria-current="page">Início</a>
             <a href="simuladores.html">Simuladores</a>
+            <a href="livros.html">Livros</a>
             <a href="links.html">Links</a>
             <a href="sobre.html">Sobre</a>
         </nav>
@@ -30,6 +31,7 @@
 
     <main>
         <section class="hero">
+            <canvas id="hero-canvas" aria-hidden="true"></canvas>
             <p class="eyebrow">Física · Química · Astronomia</p>
             <h1>Projetos de ciência, explicados por simulação.</h1>
             <p class="hero-sub">Uma coleção de simuladores interativos para explorar conceitos de ciência de forma visual e prática.</p>
@@ -40,11 +42,80 @@
         </section>
     </main>
 
+    <script>
+        (function () {
+            const canvas = document.getElementById("hero-canvas");
+            const ctx = canvas.getContext("2d");
+            const hero = canvas.parentElement;
+            let W, H, pts = [];
+            const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+            function resize() {
+                W = canvas.width = hero.clientWidth;
+                H = canvas.height = hero.clientHeight;
+            }
+
+            function init() {
+                resize();
+                const count = Math.max(30, Math.round((W * H) / 12000));
+                pts = Array.from({ length: count }, () => ({
+                    x: Math.random() * W,
+                    y: Math.random() * H,
+                    r: Math.random() * 1.3 + 0.4,
+                    vx: (Math.random() - 0.5) * 0.25,
+                    vy: (Math.random() - 0.5) * 0.25
+                }));
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, W, H);
+
+                pts.forEach((p) => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0) p.x = W;
+                    if (p.x > W) p.x = 0;
+                    if (p.y < 0) p.y = H;
+                    if (p.y > H) p.y = 0;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fillStyle = "rgba(255,255,255,0.5)";
+                    ctx.fill();
+                });
+
+                const linkDist = 110;
+                for (let i = 0; i < pts.length; i++) {
+                    for (let j = i + 1; j < pts.length; j++) {
+                        const dx = pts[i].x - pts[j].x;
+                        const dy = pts[i].y - pts[j].y;
+                        const d = Math.sqrt(dx * dx + dy * dy);
+                        if (d < linkDist) {
+                            ctx.beginPath();
+                            ctx.moveTo(pts[i].x, pts[i].y);
+                            ctx.lineTo(pts[j].x, pts[j].y);
+                            ctx.strokeStyle = `rgba(255,255,255,${0.12 * (1 - d / linkDist)})`;
+                            ctx.lineWidth = 0.6;
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                if (!reduceMotion) requestAnimationFrame(draw);
+            }
+
+            window.addEventListener("resize", resize);
+            init();
+            draw();
+        })();
+    </script>
+
     <footer class="site-footer">
         <p>Murilo Miguel</p>
         <nav class="footer-nav">
             <a href="index.html">Início</a>
             <a href="simuladores.html">Simuladores</a>
+            <a href="livros.html">Livros</a>
             <a href="links.html">Links</a>
             <a href="sobre.html">Sobre</a>
         </nav>

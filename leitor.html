@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitor — Murilo Miguel</title>
+    <meta name="description" content="Leitor de ebooks direto no navegador.">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-HH5337WDNF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-HH5337WDNF');
+</script>
+</head>
+
+<body>
+    <header class="site-header">
+        <a class="brand" href="index.html">Murilo Miguel</a>
+        <nav class="main-nav">
+            <a href="index.html">Início</a>
+            <a href="simuladores.html">Simuladores</a>
+            <a href="livros.html" aria-current="page">Livros</a>
+            <a href="links.html">Links</a>
+            <a href="sobre.html">Sobre</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="reader-page">
+            <div class="reader-toolbar">
+                <a class="cta cta-secondary" href="livros.html">← Livros</a>
+                <a class="cta" id="download-link" href="#" download>Baixar EPUB</a>
+            </div>
+            <article class="reader-content" id="conteudo">
+                <p>Carregando…</p>
+            </article>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>Murilo Miguel</p>
+        <nav class="footer-nav">
+            <a href="index.html">Início</a>
+            <a href="simuladores.html">Simuladores</a>
+            <a href="livros.html">Livros</a>
+            <a href="links.html">Links</a>
+            <a href="sobre.html">Sobre</a>
+        </nav>
+    </footer>
+
+    <script>
+        const livros = {
+            unissono: {
+                titulo: "Uníssono",
+                texto: "livros/textos/unissono.html",
+                epub: "livros/epubs/unissono.epub"
+            }
+        };
+
+        const params = new URLSearchParams(window.location.search);
+        const livro = livros[params.get("livro")];
+        const conteudoEl = document.getElementById("conteudo");
+        const downloadEl = document.getElementById("download-link");
+
+        if (!livro) {
+            conteudoEl.innerHTML = "<p>Livro não encontrado.</p>";
+        } else {
+            document.title = livro.titulo + " — Murilo Miguel";
+            downloadEl.href = livro.epub;
+            downloadEl.setAttribute("download", livro.epub.split("/").pop());
+
+            fetch(livro.texto)
+                .then((res) => res.text())
+                .then((html) => { conteudoEl.innerHTML = html; })
+                .catch(() => { conteudoEl.innerHTML = "<p>Não foi possível carregar o texto.</p>"; });
+        }
+    </script>
+</body>
+
+</html>
