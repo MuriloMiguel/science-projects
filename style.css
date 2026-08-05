@@ -409,3 +409,8 @@ a {
 .about .cta-secondary {
     margin-top: 0.5rem;
 }
+
+.about p.contact-email {
+    font-family: math;
+    font-size: 14pt;
+}
