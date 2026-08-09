@@ -27,3 +27,47 @@
         if (event.key === "Escape") closeNav();
     });
 })();
+
+(function () {
+    function fallbackCopy(text) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+        document.body.removeChild(ta);
+        return ok;
+    }
+
+    document.addEventListener("click", (event) => {
+        const btn = event.target.closest(".pix-copy-btn");
+        if (!btn) return;
+
+        const key = btn.dataset.pixKey;
+        if (!key) return;
+
+        const showCopied = () => {
+            const original = btn.dataset.originalLabel || btn.textContent;
+            btn.dataset.originalLabel = original;
+            btn.textContent = "Chave copiada!";
+            btn.classList.add("is-copied");
+            clearTimeout(btn._pixCopyTimeout);
+            btn._pixCopyTimeout = setTimeout(() => {
+                btn.textContent = original;
+                btn.classList.remove("is-copied");
+            }, 2000);
+        };
+
+        // Try the synchronous method first: it runs inside the click's user-gesture
+        // window, which async Clipboard API calls can lose while awaiting a promise.
+        if (fallbackCopy(key)) {
+            showCopied();
+        } else if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(key).then(showCopied).catch(() => {});
+        }
+    });
+})();

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perguntas — Murilo Miguel</title>
+    <meta name="description" content="Envie sua pergunta de física, química ou astronomia para ser respondida em vídeo.">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-HH5337WDNF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-HH5337WDNF');
+</script>
+    <script src="nav.js" defer></script>
+</head>
+
+<body>
+    <header class="site-header">
+        <a class="brand" href="index.html">Murilo Miguel</a>
+        <button class="nav-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="main-nav">
+            <span></span><span></span><span></span>
+        </button>
+        <nav class="main-nav" id="main-nav">
+            <a href="index.html">Início</a>
+            <a href="simuladores.html">Simuladores</a>
+            <a href="livros.html">Livros</a>
+            <a href="perguntas.html" aria-current="page">Perguntas</a>
+            <a href="links.html">Links</a>
+            <a href="sobre.html">Sobre</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="questions-page">
+            <h1>Perguntas</h1>
+            <p class="page-lead">Manda sua pergunta de física, química ou astronomia. As melhores eu respondo em vídeo nas redes sociais.</p>
+
+            <div class="notice-box">
+                <strong>Aviso:</strong> este site é estático e não tem backend nem login — não existe uma caixa de
+                mensagens privada. As perguntas enviadas ficam registradas em um formulário e podem ser lidas e
+                respondidas publicamente em vídeo. Não envie dados pessoais ou informações sensíveis na sua pergunta.
+            </div>
+
+            <div id="form-container">
+                <div class="form-embed-gate" id="form-gate">
+                    <p>Por privacidade e para evitar envios automáticos por robôs, o formulário só carrega depois de
+                        um clique.</p>
+                    <button class="cta" id="load-form" type="button">Carregar formulário de perguntas</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="support">
+            <div class="support-box">
+                <h2>Apoie o projeto</h2>
+                <p>Se quiser apoiar de forma voluntária, você pode contribuir via Pix. Todo valor ajuda a manter o site e os vídeos no ar — sem nenhuma obrigação.</p>
+                <div class="pix-copy">
+                    <code class="pix-key-display">be7bb42c-b208-4268-b1c5-d5930267afe2</code>
+                    <button class="cta cta-secondary pix-copy-btn" type="button" data-pix-key="be7bb42c-b208-4268-b1c5-d5930267afe2">Copiar chave Pix</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        (function () {
+            const gate = document.getElementById("form-gate");
+            const container = document.getElementById("form-container");
+            const button = document.getElementById("load-form");
+
+            button.addEventListener("click", () => {
+                const wrapper = document.createElement("div");
+                wrapper.className = "form-embed";
+
+                const iframe = document.createElement("iframe");
+                iframe.src = "https://docs.google.com/forms/d/e/1FAIpQLSfIkXdAJxTdr33o10v1kA89GMC83Uwv9Qy5e64qSor-h1lAFA/viewform?embedded=true";
+                iframe.title = "Formulário de perguntas";
+                iframe.loading = "lazy";
+                iframe.referrerPolicy = "no-referrer";
+                iframe.sandbox = "allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox";
+                iframe.textContent = "Carregando…";
+
+                wrapper.appendChild(iframe);
+                container.replaceChild(wrapper, gate);
+            });
+        })();
+    </script>
+
+    <footer class="site-footer">
+        <p>Murilo Miguel</p>
+        <nav class="footer-nav">
+            <a href="index.html">Início</a>
+            <a href="simuladores.html">Simuladores</a>
+            <a href="livros.html">Livros</a>
+            <a href="perguntas.html">Perguntas</a>
+            <a href="links.html">Links</a>
+            <a href="sobre.html">Sobre</a>
+        </nav>
+    </footer>
+</body>
+
+</html>
